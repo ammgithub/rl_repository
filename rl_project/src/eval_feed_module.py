@@ -41,6 +41,7 @@ def n_armed_bandit(num_bandits, num_arms, num_plays, eps_list, verbose=False):
     avg_reward = []
     opt_action = []
     for eps in eps_list:
+        # Initial reward estimate is set to zero: Qt=q_estimate
         q_estimated = np.zeros((num_bandits, num_arms))
         q_counter = np.zeros((num_bandits, num_arms))
         q_aggregated = deepcopy(q_estimated)
@@ -60,8 +61,10 @@ def n_armed_bandit(num_bandits, num_arms, num_plays, eps_list, verbose=False):
                 if arm_idx == qstar[i, :].argmax():
                     optimal_action_flag[i, j] = 1
                 
+                # Add noise, so learner receives distorted signal from qstar
                 sigma = 1.0
-                reward = qstar[i, arm_idx] + sigma * np.random.normal(0, 1)
+                noise = sigma * np.random.normal(0, 1)
+                reward = qstar[i, arm_idx] + noise
                 rewards_array[i, j] = reward
                 
                 q_counter[i, arm_idx] += 1
@@ -93,7 +96,7 @@ This may produce significant screen output. Are you sure? (y/n) """)
     for k in range(len(eps_list)):
         ax[0].plot(range(1, num_plays + 1), avg_reward[k, :], \
                    label='$\epsilon=%0.3f$'%(eps_list[k]))
-    ax[0].set_title('Average reward')
+    ax[0].set_title('Average reward for %d bandits and %d plays (sigma (noise) = %d)'%(num_bandits, num_plays, sigma))
     ax[0].set_xlabel('Plays')
     ax[0].set_ylabel('Average reward')
     ax[0].legend(loc="upper left")
@@ -102,7 +105,7 @@ This may produce significant screen output. Are you sure? (y/n) """)
     for k in range(len(eps_list)):
         ax[1].plot(range(1, num_plays + 1), opt_action[k, :], \
                    label='$\epsilon=%0.3f$'%(eps_list[k]))
-    ax[1].set_title('Optimal action in percent')
+    ax[1].set_title('Optimal action in percent for %d bandits and %d plays (sigma (noise) = %d)'%(num_bandits, num_plays, sigma))
     ax[1].set_xlabel('Plays')
     ax[1].set_ylabel('Optimal action in percent')
     ax[1].legend(loc="upper left")
@@ -120,7 +123,6 @@ if __name__ == '__main__':
     num_arms = 10
     num_plays = 1000
     eps_list = [0.0, 0.01, 0.1]
-#     eps_list = [0.1]    
     print "num_bandits = ", num_bandits
     print "num_arms = ", num_arms
     print "num_plays = ", num_plays
