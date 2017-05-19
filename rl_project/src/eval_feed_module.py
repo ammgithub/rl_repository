@@ -13,6 +13,7 @@ __version__ = 0.0
 
 import numpy as np
 import pylab as plt
+from scipy import exp
 from copy import deepcopy
 
 np.set_printoptions(linewidth = 100, edgeitems = 'all', suppress = True, 
@@ -56,8 +57,14 @@ def n_armed_bandit(num_bandits, num_arms, num_plays, eps_list, verbose=False):
                     arm_idx = q_estimated[i, :].argmax()
                 else:
                     # select random arm
-                    arm_idx = np.random.choice(num_arms, 1)
-                
+#                     arm_idx = np.random.choice(num_arms, 1)
+                    
+                    # softmax for gibbs_temp
+                    gibbs_temp = 100000.0
+                    softmax = exp(q_estimated[i, :]/gibbs_temp) / \
+                                    exp(q_estimated[i, :]/gibbs_temp).sum()
+                    arm_idx = np.random.choice(range(num_arms), p=softmax)
+               
                 if arm_idx == qstar[i, :].argmax():
                     optimal_action_flag[i, j] = 1
                 
@@ -78,7 +85,6 @@ This may produce significant screen output. Are you sure? (y/n) """)
             if a.lower() == 'y':
                 print "optimal_action_flag = \n", optimal_action_flag
                 print "q_counter = \n", q_counter
-                print "q_aggregated = \n", q_aggregated
                 print "q_estimated = \n", q_estimated
                 print "qstar = \n", qstar
                 print "rewards_array = \n", rewards_array
@@ -92,7 +98,7 @@ This may produce significant screen output. Are you sure? (y/n) """)
     
     fig, ax = plt.subplots(2, 1)
     num_fig = ax.shape[0]
-
+    
     for k in range(len(eps_list)):
         ax[0].plot(range(1, num_plays + 1), avg_reward[k, :], \
                    label='$\epsilon=%0.3f$'%(eps_list[k]))
