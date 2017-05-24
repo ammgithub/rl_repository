@@ -121,19 +121,120 @@ This may produce significant screen output. Are you sure? (y/n) """)
     
     return avg_reward, opt_action
 
+def binary_bandit(num_bandits, num_plays, p, eps_list, verbose=False):
+    """
+    Binary bandit problem.  
+    
+    Comparison
+    
+    Evaluation                vs.         Instruction
+    Learning by selection     vs.         Learning by instruction
+    Reinforcement learning    vs.         Supervised learning
+    
+    Parameters
+    ----------
+    In    : num_bandits, num_plays, p
+    Out   : opt_action
+    
+    Examples
+    --------
+    opt_action = binary_bandit(num_bandits, num_plays, p, eps_list, verbose=False)
+    """
+    np.random.seed(1)
+    num_arms = 2
+    if type(p) == list: p = np.array(p)
+    arm_best = p.argmax()
+    
+#     perOptAction = np.zeros((len(eps_list), num_plays))
+    opt_action = []
+    for eps in eps_list:
+        
+        optimal_action_flag = np.zeros((num_bandits, num_plays))
+        for i in range(num_bandits):
+            # select random arm
+            arm_idx = np.random.choice(num_arms, 1)
+            for j in range(num_plays):
+                if np.random.uniform(0, 1) <= eps:
+                    # select random arm
+                    arm_idx = np.random.choice(num_arms, 1)
+                if arm_idx == 0: 
+                    arm_other = 1
+                else:
+                    arm_other = 0
+                
+                if arm_idx == arm_best:
+                    optimal_action_flag[i, j] = 1
+                
+                p_win = p[arm_idx]
+                if p_win >= np.random.uniform(0, 1):
+                    # no switch
+                    pass
+                else:
+                    # try other arm
+                    arm_idx = arm_other
+                    
+        if verbose:
+            a = raw_input("""
+This may produce significant screen output. Are you sure? (y/n) """)
+            if a.lower() == 'y':
+                print "optimal_action_flag = \n", optimal_action_flag
+        opt_action_per_play = optimal_action_flag.mean(axis=0)
+        opt_action.append(opt_action_per_play.T)
+
+    opt_action = np.array(opt_action)
+    
+    fig, ax = plt.subplots(1, 1)
+#     num_fig = ax.shape[0]
+     
+    for k in range(len(eps_list)):
+        ax.plot(range(1, num_plays + 1), opt_action[k, :], \
+                   label='$\epsilon=%0.3f$'%(eps_list[k]))
+    ax.set_title('Optimal action in percent for %d bandits and %d plays'%(num_bandits, num_plays))
+    ax.set_xlabel('Plays')
+    ax.set_ylabel('Optimal action in percent')
+    ax.legend(loc="upper left")
+    ax.grid()
+     
+    plt.show()
+     
+    return opt_action
+    
 if __name__ == '__main__':
     """
     execfile('C:\\Users\\amalysch\\git\\rl_repository\\rl_project\\src\\eval_feed_module.py')
     """
-    num_bandits = 2000
-    num_arms = 10
-    num_plays = 1000
-    eps_list = [0.0, 0.01, 0.1]
-    print "num_bandits = ", num_bandits
-    print "num_arms = ", num_arms
-    print "num_plays = ", num_plays
-    print "eps_list = ", eps_list
-    avg_reward, opt_action = n_armed_bandit(num_bandits, num_arms, 
-                                            num_plays, eps_list)
-#     print "avg_reward = \n", avg_reward
+    selection = raw_input("""\n\nWhich experiment do you want to run? \n
+    n_armed_bandit    (1)
+    binary_bandit     (2) \n
+    Enter number: """)
     
+    if selection.lower() == '1': 
+        print "\n(1) Running n-armed bandit:"
+        num_bandits = 2000
+        num_arms = 10
+        num_plays = 1000
+        eps_list = [0.0, 0.01, 0.1]
+        print "num_bandits = ", num_bandits
+        print "num_arms = ", num_arms
+        print "num_plays = ", num_plays
+        print "eps_list = ", eps_list
+        avg_reward, opt_action = n_armed_bandit(num_bandits, num_arms, 
+                                                num_plays, eps_list)
+#         print "avg_reward = \n", avg_reward
+
+    elif selection.lower() == '2':
+        print "\n(2) Running binary bandit:"
+        num_bandits = 2000
+        num_plays = 500
+        eps_list = [0.0, 0.1]
+        p = [0.1, 0.2]
+        print "num_bandits = ", num_bandits
+        print "num_plays = ", num_plays
+        print "eps_list = ", eps_list
+        print "p = ", p
+        opt_action = binary_bandit(num_bandits, num_plays, p, eps_list)
+#         print "opt_action = \n", opt_action
+    else:
+        print "Please selected from menu. Exiting. "
+        
+        
