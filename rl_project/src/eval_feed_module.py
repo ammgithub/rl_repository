@@ -121,9 +121,16 @@ This may produce significant screen output. Are you sure? (y/n) """)
     
     return avg_reward, opt_action
 
-def binary_bandit(num_bandits, num_plays, p, eps_list, verbose=False):
+def supervised_binary_bandit(num_bandits, num_plays, p, eps_list, verbose=False):
     """
-    Binary bandit problem.  
+    Binary bandit problem.  Test whether the better of two actions can be
+    identified. 
+    
+    Supervised learning approach: failure is taken as an indicator that the
+    other action was the correct one.  Leads to oscillation for low 
+    (but distinct) probabilities of success for both actions (e.g. 0.1, 0.2). 
+    For high probabilities of success (e.g. 0.8, 0.9) the wrong action may
+    be selected consistently.  
     
     Comparison
     
@@ -138,46 +145,59 @@ def binary_bandit(num_bandits, num_plays, p, eps_list, verbose=False):
     
     Examples
     --------
-    opt_action = binary_bandit(num_bandits, num_plays, p, eps_list, verbose=False)
+    opt_action = supervised_binary_bandit(num_bandits, num_plays, p, eps_list, verbose=False)
     """
     np.random.seed(1)
     num_arms = 2
     if type(p) == list: p = np.array(p)
     arm_best = p.argmax()
-    
-#     perOptAction = np.zeros((len(eps_list), num_plays))
+    # Probability of success (defines the better action)
+    print "p = ", p
+    print "arm_best = ", arm_best
     opt_action = []
+    alpha = 0.1
     for eps in eps_list:
-        
+        # Initial reward estimate is set to zero: Qt=q_estimate
         optimal_action_flag = np.zeros((num_bandits, num_plays))
+        
         for i in range(num_bandits):
             # select random arm
             arm_idx = np.random.choice(num_arms, 1)
+            q_estimated = np.array([0.5, 0.5])
             for j in range(num_plays):
-                if np.random.uniform(0, 1) <= eps:
+                rnd_num = np.random.uniform(0, 1)
+                if not(isinstance(eps, basestring)) and rnd_num <= eps:
                     # select random arm
                     arm_idx = np.random.choice(num_arms, 1)
-                if arm_idx == 0: 
-                    arm_other = 1
-                else:
-                    arm_other = 0
-                
+                elif isinstance(eps, basestring): 
+                    arm_idx = np.random.choice(np.arange(0, num_arms), p=q_estimated)
+
                 if arm_idx == arm_best:
                     optimal_action_flag[i, j] = 1
                 
+                change_prob_flag = False
+                if isinstance(eps, basestring):
+                    change_prob_flag = True
+
+                # high p_win makes switch less likely
                 p_win = p[arm_idx]
-                if p_win >= np.random.uniform(0, 1):
-                    # no switch
-                    pass
-                else:
+                if p_win < np.random.uniform(0, 1):
                     # try other arm
-                    arm_idx = arm_other
-                    
+                    arm_idx = np.mod(arm_idx+1, 2)
+                    if eps == 'L-PI':
+                        change_prob_flag = False
+                        
+                if change_prob_flag:
+                    arm_other = np.mod(arm_idx+1, 2)
+                    q_estimated[arm_idx] += alpha * (1.0 - q_estimated[arm_idx])
+                    q_estimated[arm_other] = 1.0 - q_estimated[arm_idx]
+
         if verbose:
             a = raw_input("""
 This may produce significant screen output. Are you sure? (y/n) """)
             if a.lower() == 'y':
                 print "optimal_action_flag = \n", optimal_action_flag
+
         opt_action_per_play = optimal_action_flag.mean(axis=0)
         opt_action.append(opt_action_per_play.T)
 
@@ -185,10 +205,13 @@ This may produce significant screen output. Are you sure? (y/n) """)
     
     fig, ax = plt.subplots(1, 1)
 #     num_fig = ax.shape[0]
-     
     for k in range(len(eps_list)):
-        ax.plot(range(1, num_plays + 1), opt_action[k, :], \
+        if isinstance(eps_list[k], float):
+            ax.plot(range(1, num_plays + 1), opt_action[k, :], \
                    label='$\epsilon=%0.3f$'%(eps_list[k]))
+        elif isinstance(eps_list[k], basestring):
+            ax.plot(range(1, num_plays + 1), opt_action[k, :], \
+                   label='%s'%(eps_list[k]))
     ax.set_title('Optimal action in percent for %d bandits and %d plays'%(num_bandits, num_plays))
     ax.set_xlabel('Plays')
     ax.set_ylabel('Optimal action in percent')
@@ -206,7 +229,7 @@ if __name__ == '__main__':
     selection = raw_input("""\n\nWhich experiment do you want to run? \n
     n_armed_bandit    (1)
     binary_bandit     (2) \n
-    Enter number: """)
+    Enter number: \n""")
     
     if selection.lower() == '1': 
         print "\n(1) Running n-armed bandit:"
@@ -226,13 +249,16 @@ if __name__ == '__main__':
         print "\n(2) Running binary bandit:"
         num_bandits = 2000
         num_plays = 500
-        eps_list = [0.0, 0.1]
-        p = [0.1, 0.2]
+        eps_list = [0.0, 0.1, '$L_{R-P}$', '$L_{R-I}$']
+        # Probability of success (defines the better action)
+        p = [0.9, 0.8]
+#         p = [0.1, 0.2]
         print "num_bandits = ", num_bandits
         print "num_plays = ", num_plays
         print "eps_list = ", eps_list
         print "p = ", p
-        opt_action = binary_bandit(num_bandits, num_plays, p, eps_list)
+        opt_action = supervised_binary_bandit(num_bandits, num_plays, \
+                                              p, eps_list)
 #         print "opt_action = \n", opt_action
     else:
         print "Please selected from menu. Exiting. "
