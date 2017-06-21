@@ -43,7 +43,7 @@ def n_armed_bandit(num_bandits, num_arms, num_plays, eps_list, verbose=False):
     opt_action = []
     for eps in eps_list:
         # Initial reward estimate is set to zero: Qt=q_estimate
-        q_estimated = np.zeros((num_bandits, num_arms))
+        q_estimated = 5.0*np.ones((num_bandits, num_arms))
         q_counter = np.zeros((num_bandits, num_arms))
         q_aggregated = deepcopy(q_estimated)
 
