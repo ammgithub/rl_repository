@@ -223,9 +223,9 @@ def run_sequential(num_experiments, player_stick, verbose=False):
                 "; card_dealer = ", state[num_hits][1], \
                 "; usable_ace_player = ", state[num_hits][2]
             
-        # Implement dealer policy
+        # Implement dealer policy, dealer will not hit, if player sticks early
         if verbose: print "dealer_value = ", dealer_value
-        while dealer_value < 17:
+        while dealer_value < min(17, player_value):
             # hit dealer
             hand_dealer, deck = hit(hand_dealer, deck)
             dealer_value, usable_ace_void, standard_hand = get_hand_value(hand_dealer)
@@ -281,8 +281,8 @@ def get_state_value_function(num_experiments, player_stick):
             player_value, card_dealer, usable_ace_player = \
                                 get_player_state(hand_player, card_dealer)
         
-        # Implement dealer policy
-        while dealer_value < 17:
+        # Implement dealer policy, dealer will not hit, if player sticks early
+        while dealer_value < min(17, player_value):
             # hit dealer
             hand_dealer, deck = hit(hand_dealer, deck)
             dealer_value, usable_ace_void, standard_hand = get_hand_value(hand_dealer)
@@ -343,18 +343,19 @@ def prepare_plot_data(value_dict_ace_no_ace, flag):
                 zz[r-12, c-1] = 0.0
     return xx, yy, zz
 
-if __name__ == '__main__':
+def make_plots(value_dict_ace, value_dict_no_ace, num_experiments, player_stick):
     """
-    execfile('C:\\Users\\amalysch\\git\\rl_repository\\rl_project\\src\\blackjack_module.py')
-    """
-    num_experiments = 10000
-    player_stick = 17
-    verbose = False
-#     payoff_array, payoff_array_mean, player_stick = \
-#             run_sequential(num_experiments, player_stick, verbose)
+    Make the plots. 
     
-    value_dict = get_state_value_function(num_experiments, player_stick)
-    value_dict_ace, value_dict_no_ace = split_and_average(value_dict)
+    Parameters
+    ----------
+    In    : value_dict_ace, value_dict_no_ace, num_experiments, playerstick
+    Out   : ----
+    
+    Examples
+    --------
+    make_plots(value_dict_ace, value_dict_no_ace, num_experiments, player_stick)
+    """
     xxa, yya, zza = prepare_plot_data(value_dict_ace, True)
     xxn, yyn, zzn = prepare_plot_data(value_dict_no_ace, False)
     fig = plt.figure()
@@ -377,6 +378,48 @@ if __name__ == '__main__':
     ax.set_ylabel('Player Value')
     ax.set_zlabel('Average Winner \n (+1 Player / -1 Dealer)')
     plt.show()
+
+if __name__ == '__main__':
+    """
+    execfile('C:\\Users\\amalysch\\git\\rl_repository\\rl_project\\src\\blackjack_module.py')
+    """
+    
+    num_experiments = 1000000
+    player_stick = 17
+
+    print "\n"
+    print 60 * '-'
+    print 25 * ' ' + " Blackjack "
+    print 60 * '-'
+    print "(1) Run sequential games that are individually printed"
+    print "(2) Plot graphs"
+    print 60 * '-'
+    
+    invalid_input = True
+    while invalid_input:
+        try:
+            user_in = int(raw_input("Make selection (1)-(2): "))
+            invalid_input = False
+        except ValueError as e:
+            print "%s is not a valid selection. Please try again. "\
+            %e.args[0].split(':')[1]
+    
+    if user_in == 1:
+        print "Running %d sequential games.  Player sticks at %d"\
+        %(num_experiments, player_stick)
+        verbose = True
+        test = raw_input("Output %d experiments? (Y/N) "%num_experiments)
+        if test.lower() == 'y':
+            payoff_array, payoff_array_mean, player_stick = \
+                run_sequential(num_experiments, player_stick, verbose)
+    elif user_in == 2:
+        print "Plotting graphs for %d episodes/experiments. Player sticks at %d "\
+        %(num_experiments, player_stick)
+        value_dict = get_state_value_function(num_experiments, player_stick)
+        value_dict_ace, value_dict_no_ace = split_and_average(value_dict)
+        make_plots(value_dict_ace, value_dict_no_ace, num_experiments, player_stick)
+    else:
+        print "Invalid selection. Program terminating. "
            
     
   
