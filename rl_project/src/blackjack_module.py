@@ -1,7 +1,7 @@
 """
 Created on June 21, 2017
 
-Black Jack using Monte Carlo Methods
+Blackjack using Monte Carlo Methods
 
 Reinforcement Learning, Chapter 5, Monte Carlo Methods
 (Sutton, Barto, 1998)
@@ -14,11 +14,9 @@ __version__ = 0.0
 import numpy as np
 import pylab as plt
 from mpl_toolkits.mplot3d import axes3d
-# from mpl_toolkits.mplot3d.axes3d import Axes3D
 
 np.set_printoptions(linewidth = 100, edgeitems = 'all', suppress = True, 
                  precision = 4)
-
 
 def get_shuffled_cards():
     """
@@ -113,11 +111,22 @@ def get_hand_value(hand):
 
 def get_player_state(hand_player, card_dealer):
     """
-    S&B define 200 states represented in a vector of length three.  The 
-    first element indicates the value of the hand of the player.  There are 
-    ten possible states (12, ..., 21).  The second element describes the 
-    value of the hand of the dealer, a total of ten states (1/11, ..., 10). 
-    The third state indicates, whether the player has a usable ace (true/false). 
+    S&B define 200 states represented in a vector of length three.  
+    Alternatively, one may also consider jack, queen, king as separate 
+    events increasing the number of states to 13x10x2 = 260.  We follow this 
+    approach.  
+    
+    The first element indicates the value of the hand of the player.  There are 
+    ten possible states (12, ..., 21) for initial player value. For smaller
+    values we always hit.  These episodes/experiments are removed in the 
+    function 'split_filter_average'.  
+    
+    The second element describes the value of the hand of the dealer, 
+    a total of 13 states (1, ..., 10, 11, 12, 13). 
+
+    The third element indicates, whether the player has a usable ace (True/False). 
+    
+    state = (player_value, card_dealer, usable_ace_player)
     
     Parameters
     ----------
@@ -177,7 +186,7 @@ def get_payoff(player_value, dealer_value):
     
 def run_sequential(num_experiments, player_stick, verbose=False):
     """
-    Run num_experiments experiments sequentially.  
+    Run num_experiments experiments sequentially.  Used for testing.  
     
     Parameters
     ----------
@@ -239,7 +248,7 @@ def run_sequential(num_experiments, player_stick, verbose=False):
     payoff_array = np.array(payoff_list)
     return payoff_array, payoff_array.mean(), player_stick
 
-def get_state_value_function(num_experiments, player_stick):
+def get_value_simple(num_experiments, player_stick):
     """
     Approximate the state-value function for various blackjack policies. The 
     value 'player_stick' indicates the hand value when the player stops 
@@ -252,13 +261,13 @@ def get_state_value_function(num_experiments, player_stick):
     Parameters
     ----------
     In    : num_experiments, player_stick
-    Out   : value_function dictionary (card_dealer, player_value, useable_ace) 
+    Out   : value_function dictionary (player_value, card_dealer, useable_ace) 
             with wins and losses
     
     Examples
     --------
-    value_dict = get_state_value_function(num_experiments, player_stick)
-    value_dict = get_state_value_function(10, 17)
+    value_dict = get_value_simple(num_experiments, player_stick)
+    value_dict = get_value_simple(10, 17)
     """
     np.random.seed(1)
     value_dict = {}
@@ -270,7 +279,7 @@ def get_state_value_function(num_experiments, player_stick):
         # Compute the initial state and update value_dict key, if necessary
         player_value_init, card_dealer, usable_ace_player_init = \
                                 get_player_state(hand_player, card_dealer)
-        value_dict.setdefault((card_dealer, player_value_init, \
+        value_dict.setdefault((player_value_init, card_dealer, \
                                usable_ace_player_init), [])
         player_value = player_value_init
         
@@ -288,12 +297,19 @@ def get_state_value_function(num_experiments, player_stick):
             dealer_value, usable_ace_void, standard_hand = get_hand_value(hand_dealer)
         
         payoff = get_payoff(player_value, dealer_value)
-        value_dict[(card_dealer, player_value_init, usable_ace_player_init)].append(int(payoff))
+        value_dict[(player_value_init, card_dealer, usable_ace_player_init)].append(int(payoff))
     return value_dict
 
-def split_and_average(value_dict):
+def split_filter_average(value_dict):
     """
-    Splitting value_dict and plotting.  
+    Splitting value_dict between the cases of having and not having 
+    a usable ace.  
+    
+    We also filter samples in 'value_dict_no_ace' whose player value is eleven
+    or smaller.  These values are also excluded from the plots.  
+    'value_dict_ace' can not have player values below eleven.  
+    
+    value_dict.keys() = (player_value, card_dealer, usable_ace_player)
     
     Parameters
     ----------
@@ -302,10 +318,13 @@ def split_and_average(value_dict):
     
     Examples
     --------
-    value_dict_ace, value_dict_no_ace = split_and_average(value_dict)
+    value_dict_ace, value_dict_no_ace = split_filter_average(value_dict)
     """
+    # usable_ace=True implies player value above eleven
     value_dict_ace = {k: v for k, v in value_dict.items() if k[2] == True}
-    value_dict_no_ace = {k: v for k, v in value_dict.items() if k[2] == False and k[1] > 11}
+    # Remove episodes/experiments with low player value (we hit anyway)
+    value_dict_no_ace = {k: v for k, v in value_dict.items() \
+                         if k[2] == False and k[0] > 11}
     
     for k in sorted(value_dict_ace.iterkeys()):
         value_dict_ace[k] = np.mean(value_dict_ace[k])
@@ -314,7 +333,7 @@ def split_and_average(value_dict):
     
     return value_dict_ace, value_dict_no_ace
     
-def prepare_plot_data(value_dict_ace_no_ace, flag):
+def help_plot_data(value_dict_ace_no_ace, flag):
     """
     Prepare data for 3d plotting.  Need to assign functional values that 
     are only available in tabular format to the data received 
@@ -327,7 +346,7 @@ def prepare_plot_data(value_dict_ace_no_ace, flag):
     
     Examples
     --------
-    xx, yy, zz = prepare_plot_data(value_dict_ace_no_ace, flag)
+    xx, yy, zz = help_plot_data(value_dict_ace_no_ace, flag)
     """
     if value_dict_ace_no_ace == value_dict_ace: 
         assert flag==True, "Check input"
@@ -338,7 +357,7 @@ def prepare_plot_data(value_dict_ace_no_ace, flag):
     for c in xx[0, :]:
         for r in yy[:, 0]:
             try:
-                zz[r-12, c-1] = value_dict_ace_no_ace[(c, r, flag)]
+                zz[r-12, c-1] = value_dict_ace_no_ace[(r, c, flag)]
             except:
                 zz[r-12, c-1] = 0.0
     return xx, yy, zz
@@ -356,8 +375,8 @@ def make_plots(value_dict_ace, value_dict_no_ace, num_experiments, player_stick)
     --------
     make_plots(value_dict_ace, value_dict_no_ace, num_experiments, player_stick)
     """
-    xxa, yya, zza = prepare_plot_data(value_dict_ace, True)
-    xxn, yyn, zzn = prepare_plot_data(value_dict_no_ace, False)
+    xxa, yya, zza = help_plot_data(value_dict_ace, True)
+    xxn, yyn, zzn = help_plot_data(value_dict_no_ace, False)
     fig = plt.figure()
     ax = fig.add_subplot(211, projection='3d')
     ax.plot_wireframe(xxa, yya, zza, rstride=1, cstride=1)
@@ -379,12 +398,13 @@ def make_plots(value_dict_ace, value_dict_no_ace, num_experiments, player_stick)
     ax.set_zlabel('Average Winner \n (+1 Player / -1 Dealer)')
     plt.show()
 
+
 if __name__ == '__main__':
     """
     execfile('C:\\Users\\amalysch\\git\\rl_repository\\rl_project\\src\\blackjack_module.py')
     """
     
-    num_experiments = 1000000
+    num_experiments = 500000
     player_stick = 17
 
     print "\n"
@@ -392,13 +412,14 @@ if __name__ == '__main__':
     print 25 * ' ' + " Blackjack "
     print 60 * '-'
     print "(1) Run sequential games that are individually printed"
-    print "(2) Plot graphs"
+    print "(2) Simple Monte Carlo: plot graphs"
+    print "(3) Exploring starts: plot graphs"
     print 60 * '-'
     
     invalid_input = True
     while invalid_input:
         try:
-            user_in = int(raw_input("Make selection (1)-(2): "))
+            user_in = int(raw_input("Make selection (1)-(3): "))
             invalid_input = False
         except ValueError as e:
             print "%s is not a valid selection. Please try again. "\
@@ -415,9 +436,13 @@ if __name__ == '__main__':
     elif user_in == 2:
         print "Plotting graphs for %d episodes/experiments. Player sticks at %d "\
         %(num_experiments, player_stick)
-        value_dict = get_state_value_function(num_experiments, player_stick)
-        value_dict_ace, value_dict_no_ace = split_and_average(value_dict)
+        value_dict = get_value_simple(num_experiments, player_stick)
+        value_dict_ace, value_dict_no_ace = split_filter_average(value_dict)
         make_plots(value_dict_ace, value_dict_no_ace, num_experiments, player_stick)
+    elif user_in == 3:
+        print "Exploring starts: plotting graphs for %d episodes/experiments. Player sticks at %d "\
+        %(num_experiments, player_stick)
+        value_dict = get_value_exploring_starts(num_experiments)
     else:
         print "Invalid selection. Program terminating. "
            
