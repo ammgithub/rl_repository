@@ -398,13 +398,142 @@ def make_plots(value_dict_ace, value_dict_no_ace, num_experiments, player_stick)
     ax.set_zlabel('Average Winner \n (+1 Player / -1 Dealer)')
     plt.show()
 
+def get_value_exploring_starts(num_experiments, verbose=False):
+    """
+    Approximate the state-value function using exploring starts. 
+    
+    Policy values: 
+    0    =    stick
+    1    =    hit
+      
+    Parameters
+    ----------
+    In    : num_experiments
+    Out   : value_function dictionary (player_value, card_dealer, useable_ace) 
+            with wins and losses
+     
+    Examples
+    --------
+    Q_dict = get_value_exploring_starts(num_experiments, verbose)
+    Q_dict = get_value_exploring_starts(10)
+    """
+    # Initialization
+    np.random.seed(1)
+    policy_dict = {}
+    # policy keys (player_value, card_dealer, usable_ace)
+    for i in range(12, 22):
+        for j in range(1, 14):
+            for k in (False, True):
+                # policy values: 0=stick, 1=hit
+                policy_dict.setdefault((i, j, k), 0)
+    Q_dict_detailed = {}
+    Q_dict_average = {}
+    # Q_dict_detailed -> list of rewards [1, 0, -1, ...]
+    # Q_dict_average -> average of rewards 
+    for i in range(12, 22):
+        for j in range(1, 14):
+            for k in (False, True):
+                # policy values: 0=stick, 1=hit
+                    for a in range(2): 
+                        # action: 0, 1
+                        Q_dict_detailed.setdefault(((i, j, k), a), [])
+                        Q_dict_average.setdefault(((i, j, k), a), 0.0)
+    
+    # Monte Carlo with exploring starts (ES)
+    for i in range(1, num_experiments+1):
+
+        # Generate episode in state (list of tuples)
+        if verbose: print 30 * '-'
+        state = []
+        deck = get_shuffled_cards()
+        hand_player, hand_dealer, card_dealer, deck = deal(deck)
+        dealer_value, usable_ace_void, standard_hand = get_hand_value(hand_dealer)
+        player_value, usable_ace, standard_hand = get_hand_value(hand_player)
+        while player_value < 12:
+            # if player value < 12, hit in any case
+            # TODO: include while also in get_value_simple
+            hand_player, deck = hit(hand_player, deck)
+            player_value, usable_ace, standard_hand = get_hand_value(hand_player)
+        num_hits = 0
+        state.append(get_player_state(hand_player, card_dealer))
+        if verbose:
+            print state[num_hits]
+        key_policy = state[num_hits]
+        assert len(key_policy) == 3, "Check policy key. "
+        # Exploring starts
+        policy_dict[key_policy] = np.random.choice(2)
+        exploring_policy = policy_dict[key_policy]
+        if verbose: print "exploring_policy = ", exploring_policy
+        while exploring_policy and player_value <= 21:
+            # hit player
+            num_hits += 1
+            hand_player, deck = hit(hand_player, deck)
+            player_value, card_dealer, usable_ace_player = \
+                                get_player_state(hand_player, card_dealer)
+            state.append((player_value, card_dealer, usable_ace_player))
+            if verbose:
+                print state[num_hits]
+            if player_value <= 21:
+                key_policy = state[num_hits]
+                exploring_policy = policy_dict[key_policy]
+                if verbose: 
+                    print "exploring_policy = ", exploring_policy
+            else:
+                # Busted, but state has been added...
+                pass
+        # Episode generated in state
+        
+        # Dealer will not hit, if player sticks early. Correct?
+        while dealer_value < min(17, player_value):
+            hand_dealer, deck = hit(hand_dealer, deck)
+            dealer_value, usable_ace_void, standard_hand = \
+                                            get_hand_value(hand_dealer)
+        if verbose:
+            print "player_value = ", player_value
+            print "dealer_value = ", dealer_value
+        
+        payoff = get_payoff(player_value, dealer_value)
+        if verbose: print "Experiment %d payoff: %d"%(i, payoff)
+        if verbose: print "state = ", state
+        
+        for i in range(num_hits+1):
+            # update only states that are not busted
+            Q_check_action = {}
+            if state[i][0] <= 21:
+                key_state = state[i]
+                if verbose: print "key_state = ", key_state
+                # key_Q = (key_state, key_policy)
+                action = policy_dict[key_state]
+                Q_dict_detailed[(key_state, action)].append(payoff)
+                Q_dict_average[(key_state, action)] = \
+                            np.mean(Q_dict_detailed[(key_state, action)])
+                
+                # Q_check_action: dict of (action, reward) pairs for key_state
+                Q_check_action = {k[1]: v for k, v in Q_dict_average.iteritems() \
+                                  if k[0] == key_state}
+                
+                Q_value_max = max(Q_check_action.values())
+                max_action2 = (list(Q_check_action.keys())
+                              [list(Q_check_action.values()).index(Q_value_max)])
+                
+                # consider instead
+                if Q_dict_average[(key_state, 0)] >= Q_dict_average[(key_state, 1)]:
+                    max_action1 = 0
+                else: 
+                    max_action1 = 1
+                if verbose: print "Q_check_action = ", Q_check_action
+                assert max_action2 == max_action1, "Check optimal action. "
+
+                policy_dict[key_state] = max_action1
+                
+    return Q_dict_average, policy_dict
 
 if __name__ == '__main__':
     """
     execfile('C:\\Users\\amalysch\\git\\rl_repository\\rl_project\\src\\blackjack_module.py')
     """
     
-    num_experiments = 500000
+    num_experiments = 200000
     player_stick = 17
 
     print "\n"
@@ -416,14 +545,16 @@ if __name__ == '__main__':
     print "(3) Exploring starts: plot graphs"
     print 60 * '-'
     
-    invalid_input = True
-    while invalid_input:
-        try:
-            user_in = int(raw_input("Make selection (1)-(3): "))
-            invalid_input = False
-        except ValueError as e:
-            print "%s is not a valid selection. Please try again. "\
-            %e.args[0].split(':')[1]
+    user_in = 3
+
+#     invalid_input = True
+#     while invalid_input:
+#         try:
+#             user_in = int(raw_input("Make selection (1)-(3): "))
+#             invalid_input = False
+#         except ValueError as e:
+#             print "%s is not a valid selection. Please try again. "\
+#             %e.args[0].split(':')[1]
     
     if user_in == 1:
         print "Running %d sequential games.  Player sticks at %d"\
@@ -440,9 +571,10 @@ if __name__ == '__main__':
         value_dict_ace, value_dict_no_ace = split_filter_average(value_dict)
         make_plots(value_dict_ace, value_dict_no_ace, num_experiments, player_stick)
     elif user_in == 3:
-        print "Exploring starts: plotting graphs for %d episodes/experiments. Player sticks at %d "\
-        %(num_experiments, player_stick)
-        value_dict = get_value_exploring_starts(num_experiments)
+        print "Exploring starts: plotting graphs for %d episodes/experiments. "\
+        %(num_experiments)
+        verbose = False
+        Q_dict_average, policy_dict = get_value_exploring_starts(num_experiments, verbose)
     else:
         print "Invalid selection. Program terminating. "
            
